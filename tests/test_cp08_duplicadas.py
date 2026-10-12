@@ -1,4 +1,4 @@
-from .base import FerremaxTestCase
+from tests.base import FerremaxTestCase
 
 
 class CP08DuplicadasTest(FerremaxTestCase):
