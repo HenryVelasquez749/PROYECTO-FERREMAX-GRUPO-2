@@ -1,0 +1,26 @@
+# Matriz de trazabilidad RF/RNF hacia código y prueba
+
+| Requisito | Código relacionado | Prueba o evidencia |
+|---|---|---|
+| RF-01 | `GET /api/stock-consolidado` (`get_stock_consolidado`) | Consultar los seis SKU semilla y comprobar stocks por sucursal y total global. |
+| RF-02 | `POST /api/reservas` (`gestionar_reservas`) | Crear reserva con stock disponible y comprobar descuento, estado `ACTIVA` y expiración. |
+| RF-03 | `POST /api/reservas/cancelar/<id>` (`cancelar_reserva`) y `POST /api/reservas/expirar` (`expirar_reservas`) | Cancelar y expirar reservas vencidas; verificar cambio de estado y reintegro de unidades. |
+| RF-04 | `POST /api/vender` (`vender`) | Vender como Cajero con stock suficiente y comprobar descuento y auditoría `VENTA_LOCAL`. |
+| RF-05 | `POST /api/merma` (`registrar_merma`) | Registrar merma como Bodega y comprobar descuento, motivo y auditoría `AJUSTE_NEGATIVO_MERMA`. |
+| RF-06 | `POST /api/devolucion` (`registrar_devolucion`) | Procesar devolución autorizada y comprobar incremento de stock y auditoría `DEVOLUCION_RECIBIDA`. |
+| RF-07 | `GET /api/stock-consolidado` (`EvaluadorUrgencia`, `EstrategiaLeadTimeLargo`, `EstrategiaTemporadaAlta`) | Sembrar stock bajo umbral y comprobar `alerta_activa`, detalle y nivel de urgencia. |
+| RF-08 | Interfaz `toggleRed`, `sincronizarColaOffline` y `POST /api/sincronizar-offline` | Desconectar el simulador, encolar una venta y comprobar sincronización al volver online. |
+| RNF-03 | Cola offline de `templates/index.html` y `sincronizar_offline` | Repetir la prueba offline y verificar que las transacciones pendientes llegan al backend. |
+| RF-09 | `GET /api/pos-antiguo/homologar/<sku_antiguo>` (`homologar_pos_antiguo`) | Consultar `POS-CEM-OLD` y comprobar respuesta `CEM-001` y auditoría de homologación. |
+| RF-10 | `GET/POST /api/ordenes` (`gestionar_ordenes`) y `POST /api/ordenes/aprobar/<id>` (`aprobar_orden`) | Crear borrador como Bodega y aprobarlo como Admin; comprobar estado, stock y precio +30%. |
+| RF-11 | Validaciones de rol en `gestionar_ordenes` y `aprobar_orden` | Intentar crear como Admin y aprobar como Bodega; ambos intentos deben responder 403. |
+| RF-12 | `POST /api/traspaso` (`solicitar_traspaso`) | Ejecutar traspaso autorizado y comprobar descuento en origen, suma en destino y consulta ordenada por `id ASC`. |
+| RF-13 | Validaciones `rol_usuario` en las rutas de venta, merma, reservas, órdenes, traspaso y umbral | Ejecutar operaciones con roles no autorizados y comprobar 403; revisar cambios de rol en la interfaz. |
+| RNF-02 | Mismo conjunto de validaciones RBAC y `registrar_auditoria` | Verificar que el control de acceso y los intentos sensibles quedan registrados en bitácora. |
+| RF-14 | `POST /api/umbral/actualizar` (`actualizar_umbral`) | Actualizar umbral como Admin y comprobar que una alerta posterior usa el nuevo valor. |
+
+La matriz se completa incrementalmente a medida que se audita cada requisito contra el backend.
+
+## Auditoria global
+
+La cobertura RF -> código -> prueba queda completa para RF-01 a RF-14. RNF-02 y RNF-03 tienen evidencia directa en las validaciones RBAC y la sincronización offline; RNF-01 y RNF-06 tienen revisión específica en `docs/auditoria-rnf.md`. RNF-04, RNF-05 y RNF-07 se mantienen como controles de integridad, interfaz y mantenibilidad para la verificación del prototipo.
