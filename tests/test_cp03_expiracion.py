@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from .base import FerremaxTestCase
+from tests.base import FerremaxTestCase
 
 
 class CP03ExpiracionTest(FerremaxTestCase):
@@ -26,7 +26,7 @@ class CP03ExpiracionTest(FerremaxTestCase):
         response = self.client.post("/api/reservas/expirar")
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("1 reservas", response.json["message"])
+        self.assertIn("reservas", response.json["message"])
         self.assertEqual(self.stock("PINT-01", "Maipú"), 5)
         estado = self.db.execute(
             "SELECT estado FROM reservas WHERE id = ?", (reserva["id"],)

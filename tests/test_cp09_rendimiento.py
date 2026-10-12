@@ -1,6 +1,6 @@
 import time
 
-from .base import FerremaxTestCase
+from tests.base import FerremaxTestCase
 
 
 class CP09RendimientoTest(FerremaxTestCase):
