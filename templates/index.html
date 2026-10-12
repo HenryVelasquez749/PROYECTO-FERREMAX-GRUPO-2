@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FerreMax - Sistema Distribuido Multi-Sucursal (100% RF/RNF)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @keyframes marquee {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+        .animate-marquee-slow {
+            display: inline-block;
+            white-space: nowrap;
+            animation: marquee 35s linear infinite;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans min-h-screen pb-12">
+
+    <!-- HEADER DE CONTROL Y SIMULADOR OFFLINE (RF-08 / RNF-03) -->
+    <header class="bg-slate-800 border-b border-slate-700 p-4 sticky top-0 z-50 shadow-md">
+        <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-500/30">
+                    <i class="fa-solid fa-network-wired text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-xl tracking-wide text-blue-400">FerreMax <span class="text-xs text-slate-400 bg-slate-700 px-2 py-0.5 rounded-full">Distribuido v8.5</span></h1>
+                    <p class="text-xs text-slate-400">Sucursales: Maipú | Puente Alto | La Florida</p>
+                </div>
+            </div>
+
+            <!-- SIMULADOR INTERRUPTOR ONLINE / OFFLINE (RF-08) -->
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-700">
+                    <span class="text-xs font-semibold mr-2 text-slate-300">Estado de Red:</span>
+                    <button id="btnEstadoRed" onclick="toggleRed()" class="px-3 py-1 rounded-lg text-xs font-bold bg-emerald-600 text-white shadow-md transition flex items-center gap-1.5">
+                        <span id="dotRed" class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+                        <span id="labelRed">ONLINE (Red Activa)</span>
+                    </button>
+                </div>
+
+                <!-- SELECTOR DE ROLES RBAC (RF-13) -->
+                <div class="flex items-center space-x-2 bg-slate-900 p-1.5 rounded-xl border border-slate-700">
+                    <span class="text-xs font-semibold text-slate-400 pl-2"><i class="fa-solid fa-user-shield text-blue-400"></i> Rol:</span>
+                    <select id="rolSelect" onchange="cambiarRol()" class="bg-blue-600 text-white font-bold text-xs px-3 py-1.5 rounded-lg focus:outline-none cursor-pointer hover:bg-blue-500 transition">
+                        <option value="Admin">1. Administrador General (Aprobar Orden / Umbrales)</option>
+                        <option value="Bodega">2. Encargado de Bodega (Mermas / Traspasos / Ordenes)</option>
+                        <option value="Cajero">3. Cajero (Ventas / Devoluciones / Reservas)</option>
+                        <option value="Gerente">4. Gerente de Tienda (Exclusivo: Auditoría ISO)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- BANNER DE ALERTA OBSERVER CON STRATEGY (RF-07 / PATRONES) -->
+    <div id="bannerAlertaObserver" class="hidden bg-rose-600 text-white py-2 px-4 shadow-xl border-b border-rose-400 overflow-hidden relative">
+        <div class="flex items-center space-x-3">
+            <span class="bg-white text-rose-600 font-extrabold text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider animate-bounce">
+                🚨 OBSERVER + STRATEGY
+            </span>
+            <div class="overflow-hidden w-full">
+                <p id="textoAlertaObserver" class="text-xs font-bold animate-marquee-slow"></p>
+            </div>
+        </div>
+    </div>
+
+    <main class="max-w-7xl mx-auto p-6 space-y-6">
+
+        <!-- STATUS BAR & COLA DE SINCRONIZACIÓN OFFLINE (RNF-01 / RNF-03) -->
+        <div id="statusBar" class="bg-gradient-to-r from-blue-900/40 via-slate-800 to-indigo-900/40 border border-blue-500/30 rounded-2xl p-4 flex justify-between items-center shadow-lg">
+            <div>
+                <h2 id="statusTitle" class="text-sm font-bold text-blue-300">Sincronización Nube Activa (Tolerancia a Fallos Offline - RNF-03)</h2>
+                <p id="statusSub" class="text-xs text-slate-300">Ventas locales procesadas localmente con latencia &lt; 5s.</p>
+            </div>
+            <div class="flex items-center space-x-3">
+                <span id="badgeColaOffline" class="hidden text-xs bg-amber-500/20 text-amber-300 border border-amber-500/30 px-3 py-1 rounded-full font-bold">
+                    Cola Offline: <span id="numCola">0</span> transacciones pendientes
+                </span>
+            </div>
+        </div>
+
+        <!-- SECCIÓN 1: STOCK CONSOLIDADO Y HOMOLOGACIÓN SKU (RF-01 / RF-09) -->
+        <section class="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
+            <div class="p-4 border-b border-slate-700 flex flex-wrap justify-between items-center bg-slate-800/80 gap-3">
+                <div>
+                    <h3 class="font-bold text-slate-200 flex items-center gap-2 text-base">
+                        <i class="fa-solid fa-boxes-stacked text-blue-400"></i> Stock Consolidado Multi-Sucursal (RF-01)
+                    </h3>
+                    <p class="text-xs text-slate-400">Consulta de inventario físico en tiempo real con precios de venta y proveedores por sucursal.</p>
+                </div>
+
+                <!-- MÓDULO HOMOLOGACIÓN POS ANTIGUO (RF-09) -->
+                <div class="flex items-center space-x-2 bg-slate-900 p-1.5 rounded-xl border border-slate-700 text-xs">
+                    <span class="text-slate-400 font-bold"><i class="fa-solid fa-barcode text-amber-400"></i> POS Antiguo SKU:</span>
+                    <input id="inputSkuAntiguo" type="text" placeholder="Ej: POS-CEM-OLD" class="bg-slate-800 text-white px-2 py-1 rounded border border-slate-600 focus:outline-none text-xs uppercase w-32">
+                    <button onclick="homologarSku()" class="bg-amber-600 hover:bg-amber-500 text-white px-2.5 py-1 rounded font-bold transition">
+                        Homologar (RF-09)
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm text-slate-300">
+                    <thead class="bg-slate-900/80 text-slate-400 text-xs uppercase tracking-wider">
+                        <tr>
+                            <th class="p-3">SKU</th>
+                            <th class="p-3">Producto</th>
+                            <th class="p-3">Proveedor(es) / Lead Time</th>
+                            <th class="p-3">Precio Venta (+30%)</th>
+                            <th class="p-3 text-center bg-slate-800/60">Maipú</th>
+                            <th class="p-3 text-center bg-slate-800/60">Puente Alto</th>
+                            <th class="p-3 text-center bg-slate-800/60">La Florida</th>
+                            <th class="p-3 text-center font-bold text-blue-300">Total Global</th>
+                            <th class="p-3 text-right">Acción Venta Local (RF-04)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaConsolidada" class="divide-y divide-slate-700/50 text-xs">
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- SECCIÓN 2: DEVOLUCIONES Y MERMAS EN TRASLADO (RF-05 / RF-06) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- REGISTRAR MERMA POR DAÑO EN TRASLADO (RF-05) -->
+            <section class="bg-slate-800 rounded-2xl border border-rose-500/40 p-5 shadow-xl">
+                <h3 class="font-bold text-rose-300 mb-2 flex items-center gap-2 text-sm">
+                    <i class="fa-solid fa-dumpster text-rose-400"></i> Registrar Merma por Daño en Traslado (Exclusivo Bodega - RF-05)
+                </h3>
+                <p class="text-xs text-slate-400 mb-3">Registra un ajuste negativo por mercadería dañada durante la recepción.</p>
+                <form onsubmit="registrarMerma(event)" class="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                        <label class="text-slate-400">SKU Producto</label>
+                        <input id="mermaSku" type="text" placeholder="Ej: FIER-02" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none uppercase">
+                    </div>
+                    <div>
+                        <label class="text-slate-400">Sucursal Receptora</label>
+                        <select id="mermaSucursal" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+                            <option value="Maipú">Maipú</option>
+                            <option value="Puente Alto">Puente Alto</option>
+                            <option value="La Florida">La Florida</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-slate-400">Cantidad Dañada</label>
+                        <input id="mermaCant" type="number" min="1" value="1" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="text-slate-400">Motivo del Ajuste Negativo</label>
+                        <input id="mermaMotivo" type="text" value="Fisurado durante flete" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+                    </div>
+                    <button type="submit" class="col-span-2 bg-rose-600 hover:bg-rose-500 text-white font-bold py-2 rounded-lg transition shadow-md mt-1">
+                        Aplicar Ajuste Negativo (RF-05)
+                    </button>
+                </form>
+            </section>
+
+            <!-- PROCESAR DEVOLUCIÓN DE CLIENTE (RF-06) -->
+            <section class="bg-slate-800 rounded-2xl border border-emerald-500/40 p-5 shadow-xl">
+                <h3 class="font-bold text-emerald-300 mb-2 flex items-center gap-2 text-sm">
+                    <i class="fa-solid fa-rotate-left text-emerald-400"></i> Procesar Devolución de Cliente (RF-06)
+                </h3>
+                <p class="text-xs text-slate-400 mb-3">Reintegra un producto devuelto directamente al inventario físico local.</p>
+                <form onsubmit="procesarDevolucion(event)" class="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                        <label class="text-slate-400">SKU Producto</label>
+                        <input id="devSku" type="text" placeholder="Ej: CEM-001" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none uppercase">
+                    </div>
+                    <div>
+                        <label class="text-slate-400">Sucursal de Recepción</label>
+                        <select id="devSucursal" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+                            <option value="Maipú">Maipú</option>
+                            <option value="Puente Alto">Puente Alto</option>
+                            <option value="La Florida">La Florida</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-slate-400">Cantidad Devuelta</label>
+                        <input id="devCant" type="number" min="1" value="1" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+                    </div>
+                    <div class="flex items-end">
+                        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-lg transition shadow-md">
+                            Sumar a Inventario (RF-06)
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+        </div>
+
+        <!-- CONFIGURAR UMBRALES (ADMIN - RF-14) -->
+        <section id="seccionConfigUmbrales" class="bg-slate-800 rounded-2xl border border-amber-500/40 p-5 shadow-xl">
+            <h3 class="font-bold text-amber-300 mb-2 flex items-center gap-2 text-sm">
+                <i class="fa-solid fa-sliders text-amber-400"></i> Configurar Umbrales de Stock Crítico (Exclusivo Admin - RF-14)
+            </h3>
+            <p class="text-xs text-slate-400 mb-3">Modifique el valor mínimo que dispara las alertas del Observer.</p>
+            <form onsubmit="guardarUmbral(event)" class="grid grid-cols-4 gap-3 text-xs">
+                <div>
+                    <label class="text-slate-400">SKU Producto</label>
+                    <input id="umbralSku" type="text" placeholder="Ej: CEM-001" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none uppercase">
+                </div>
+                <div>
+                    <label class="text-slate-400">Sucursal</label>
+                    <select id="umbralSucursal" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+                        <option value="Maipú">Maipú</option>
+                        <option value="Puente Alto">Puente Alto</option>
+                        <option value="La Florida">La Florida</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-slate-400">Nuevo Umbral Crítico (u.)</label>
+                    <input id="umbralValor" type="number" min="1" value="10" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+                </div>
+                <div class="flex items-end">
+                    <button type="submit" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 rounded-lg transition shadow-md">
+                        Guardar Umbral
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <!-- SECCIÓN 3: ÓRDENES DE COMPRA Y SEGREGACIÓN DE FUNCIONES (RF-10 / RF-11) -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- HISTORIAL DE ÓRDENES -->
+            <div class="lg:col-span-2 bg-slate-800 rounded-2xl border border-slate-700 p-5 shadow-xl">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="font-bold text-slate-200 flex items-center gap-2 text-sm">
+                        <i class="fa-solid fa-file-invoice text-indigo-400"></i> Secuencia de Aprobación de Compras (RF-10 / RF-11)
+                    </h3>
+                    <button onclick="cargarOrdenes()" class="text-xs bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded text-slate-300">
+                        <i class="fa-solid fa-rotate-right"></i> Refrescar
+                    </button>
+                </div>
+                <p class="text-xs text-slate-400 mb-3">
+                    Segregación: <span class="text-amber-400 font-bold">1. BORRADOR (Bodega)</span> ➔ <span class="text-emerald-400 font-bold">2. APROBAR & RECEPCIONAR (Admin suma stock y fija precio +30%)</span>.
+                </p>
+                <div id="panelOrdenes" class="space-y-3 max-h-80 overflow-y-auto pr-1">
+                </div>
+            </div>
+
+            <!-- FORMULARIO CREAR ORDEN (BODEGA) -->
+            <div class="bg-slate-800 rounded-2xl border border-slate-700 p-5 shadow-xl">
+                <h3 class="font-bold text-slate-200 mb-2 flex items-center gap-2 text-sm">
+                    <i class="fa-solid fa-cart-plus text-amber-400"></i> Sugerir Orden (Exclusivo Bodega)
+                </h3>
+                <p class="text-xs text-slate-400 mb-3">Genera sugerencia en borrador a partir de las alertas.</p>
+                <form id="formCrearOrden" onsubmit="crearOrden(event)" class="space-y-2.5 text-xs">
+                    <div>
+                        <label class="text-slate-400">Sucursal Receptora</label>
+                        <select id="ordenSucursal" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 focus:outline-none">
+                            <option value="Maipú">Sucursal Maipú</option>
+                            <option value="Puente Alto">Sucursal Puente Alto</option>
+                            <option value="La Florida">Sucursal La Florida</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-slate-400">Proveedor Nuevo / Actual</label>
+                        <input id="ordenProv" type="text" placeholder="Ej: NUEVO PROVEEDOR FERRETERO S.A." required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="text-slate-400">SKU Producto</label>
+                        <input id="ordenSku" type="text" placeholder="Ej: CEM-001" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 focus:outline-none uppercase">
+                    </div>
+                    <div>
+                        <label class="text-slate-400">Nombre del Producto</label>
+                        <input id="ordenNombre" type="text" placeholder="Ej: Cemento Melón Especial 25kg" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 focus:outline-none">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-slate-400">Cantidad u.</label>
+                            <input id="ordenCant" type="number" min="1" value="10" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="text-slate-400">Costo Proveedor ($)</label>
+                            <input id="ordenPrecio" type="number" min="1" step="any" placeholder="Ej: 10000" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 focus:outline-none">
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold py-2 rounded-xl transition mt-2 shadow-lg">
+                        Generar Orden en BORRADOR
+                    </button>
+                </form>
+            </div>
+
+        </section>
+
+        <!-- SECCIÓN 4: RESERVAS Y TRASPASOS INTER-SUCURSAL (RF-02 / RF-03 / RF-12) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- RESERVAS ACTIVAS -->
+            <section class="bg-slate-800 rounded-2xl border border-slate-700 p-5 shadow-xl flex flex-col justify-between">
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <h3 class="font-bold text-slate-200 flex items-center gap-2 text-sm">
+                            <i class="fa-solid fa-clock-rotate-left text-amber-400"></i> Reservas Activas (24h - RF-02/03)
+                        </h3>
+                        <button onclick="expirarReservas()" class="text-[11px] bg-rose-600 hover:bg-rose-500 font-bold text-white px-2.5 py-1 rounded-lg transition shadow-md">
+                            <i class="fa-solid fa-bolt"></i> Expirar 24h Auto
+                        </button>
+                    </div>
+                    <p class="text-xs text-slate-400 mb-3">Reservas de clientes en otra sucursal. <span class="text-amber-300 font-bold">(Exclusivo Cajero/Admin)</span></p>
+                    <div id="listaReservas" class="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    </div>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-slate-700">
+                    <h4 class="text-xs font-bold text-blue-300 mb-2">Generar Reserva Inter-Sucursal (Solo Cajero - RF-02)</h4>
+                    <form onsubmit="crearReserva(event)" class="grid grid-cols-3 gap-2 text-xs">
+                        <input id="reservaSku" type="text" placeholder="SKU (CEM-001)" required class="bg-slate-900 border border-slate-700 rounded-lg p-2 focus:outline-none uppercase">
+                        <select id="reservaSucursal" class="bg-slate-900 border border-slate-700 rounded-lg p-2 focus:outline-none">
+                            <option value="Maipú">Sucursal Maipú</option>
+                            <option value="Puente Alto">Sucursal Puente Alto</option>
+                            <option value="La Florida">Sucursal La Florida</option>
+                        </select>
+                        <input id="reservaCliente" type="text" placeholder="Cliente" required class="bg-slate-900 border border-slate-700 rounded-lg p-2 focus:outline-none">
+                        <input id="reservaCant" type="number" min="1" value="1" required class="bg-slate-900 border border-slate-700 rounded-lg p-2 focus:outline-none">
+                        <button type="submit" class="col-span-2 bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 rounded-lg transition">
+                            Reservar Stock (24h)
+                        </button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- TRASPASO INTER-SUCURSAL (RF-12) -->
+            <section class="bg-slate-800 rounded-2xl border border-slate-700 p-5 shadow-xl">
+                <h3 class="font-bold text-slate-200 mb-2 flex items-center gap-2 text-sm">
+                    <i class="fa-solid fa-truck-ramp-box text-emerald-400"></i> Traspaso Inter-Sucursal FIFO (Exclusivo Bodega - RF-12)
+                </h3>
+                <p class="text-xs text-slate-400 mb-4">Transferencia física de mercadería entre bodegas.</p>
+                <form onsubmit="ejecutarTraspaso(event)" class="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                        <label class="text-slate-400">SKU Producto</label>
+                        <input id="traspasoSku" type="text" placeholder="Ej: CAS-003" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none uppercase">
+                    </div>
+                    <div>
+                        <label class="text-slate-400">Cantidad u.</label>
+                        <input id="traspasoCant" type="number" min="1" value="1" required class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="text-slate-400">Sucursal Origen</label>
+                        <select id="traspasoOrigen" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+                            <option value="Maipú">Maipú</option>
+                            <option value="Puente Alto">Puente Alto</option>
+                            <option value="La Florida">La Florida</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-slate-400">Sucursal Destino</label>
+                        <select id="traspasoDestino" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 mt-1 focus:outline-none">
+                            <option value="La Florida">La Florida</option>
+                            <option value="Puente Alto">Puente Alto</option>
+                            <option value="Maipú">Maipú</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="col-span-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded-xl mt-2 transition">
+                        Ejecutar Traspaso
+                    </button>
+                </form>
+            </section>
+
+        </div>
+
+        <!-- SECCIÓN 5: AUDITORÍA ISO 27001 (GERENTE - RNF-06) -->
+        <section id="seccionAuditoria" class="hidden bg-slate-800 rounded-2xl border border-blue-500/40 p-5 shadow-2xl">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="font-bold text-blue-300 flex items-center gap-2 text-base">
+                    <i class="fa-solid fa-shield-halved text-blue-400"></i> Bitácora de Auditoría ISO 27001 (Exclusiva Gerente - RNF-06)
+                </h3>
+                <span class="text-xs bg-blue-900/60 text-blue-300 border border-blue-500/40 px-3 py-1 rounded-full font-bold">
+                    ISO 27001 AUDIT TRAIL LOG
+                </span>
+            </div>
+            <p class="text-xs text-slate-400 mb-4">Registro inalterable de operaciones, autorizaciones y mermas.</p>
+            <div class="overflow-x-auto max-h-64 overflow-y-auto">
+                <table class="w-full text-left text-xs text-slate-300">
+                    <thead class="bg-slate-900 text-slate-400 uppercase sticky top-0">
+                        <tr>
+                            <th class="p-2.5">ID Log</th>
+                            <th class="p-2.5">Fecha / Hora</th>
+                            <th class="p-2.5">Rol Autor</th>
+                            <th class="p-2.5">Acción Registrada</th>
+                            <th class="p-2.5">Detalles Operativos</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaAuditoria" class="divide-y divide-slate-700/50 font-mono"></tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        let rolActual = 'Admin';
+        let modoOnline = true;
+        let colaVentasOffline = [];
+
+        function toggleRed() {
+            modoOnline = !modoOnline;
+            const btn = document.getElementById('btnEstadoRed');
+            const label = document.getElementById('labelRed');
+            const badgeCola = document.getElementById('badgeColaOffline');
+            
+            if(modoOnline) {
+                btn.className = "px-3 py-1 rounded-lg text-xs font-bold bg-emerald-600 text-white shadow-md transition flex items-center gap-1.5";
+                label.innerText = "ONLINE (Red Activa)";
+                
+                if(colaVentasOffline.length > 0) {
+                    sincronizarColaOffline();
+                } else {
+                    badgeCola.classList.add('hidden');
+                }
+            } else {
+                btn.className = "px-3 py-1 rounded-lg text-xs font-bold bg-rose-600 text-white shadow-md transition flex items-center gap-1.5 animate-pulse";
+                label.innerText = "OFFLINE (Caída de Red - RF-08)";
+                badgeCola.classList.remove('hidden');
+                alert("MODO OFFLINE ACTIVADO (RF-08):\n\n- Las ventas locales seguirán operando con SQLite Local.\n- Se bloquean las consultas/reservas inter-sucursal.");
+            }
+        }
+
+        async function sincronizarColaOffline() {
+            const res = await fetch('/api/sincronizar-offline', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(colaVentasOffline)
+            });
+            const data = await res.json();
+            alert(`[RNF-01 SINCRONIZACIÓN NUBE]:\n${data.message}`);
+            colaVentasOffline = [];
+            document.getElementById('numCola').innerText = "0";
+            document.getElementById('badgeColaOffline').classList.add('hidden');
+            cargarStock();
+            if(rolActual === 'Gerente') cargarAuditoria();
+        }
+
+        function cambiarRol() {
+            rolActual = document.getElementById('rolSelect').value;
+            
+            const boxAuditoria = document.getElementById('seccionAuditoria');
+            const boxUmbrales = document.getElementById('seccionConfigUmbrales');
+
+            if(rolActual === 'Gerente') boxAuditoria.classList.remove('hidden');
+            else boxAuditoria.classList.add('hidden');
+
+            if(rolActual === 'Admin') boxUmbrales.classList.remove('hidden');
+            else boxUmbrales.classList.add('hidden');
+
+            cargarStock();
+            cargarReservas();
+            cargarOrdenes();
+            if(rolActual === 'Gerente') cargarAuditoria();
+        }
+
+        async function cargarStock() {
+            if(!modoOnline) return;
+
+            const res = await fetch('/api/stock-consolidado');
+            const data = await res.json();
+            const tbody = document.getElementById('tablaConsolidada');
+            tbody.innerHTML = '';
+
+            const banner = document.getElementById('bannerAlertaObserver');
+            const texto = document.getElementById('textoAlertaObserver');
+            
+            if(data.alerta_activa) {
+                texto.innerText = data.detalles_alerta;
+                banner.classList.remove('hidden');
+            } else {
+                banner.classList.add('hidden');
+            }
+
+            data.productos.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-700/30 transition border-b border-slate-700/40";
+                
+                const m = p.stocks['Maipú'] || 0;
+                const pa = p.stocks['Puente Alto'] || 0;
+                const lf = p.stocks['La Florida'] || 0;
+
+                let provHTML = Object.entries(p.proveedores_sucursal).map(([suc, prov]) => 
+                    `<span class="block text-[11px] text-slate-300 font-semibold"><strong class="text-blue-400">${suc}:</strong> ${prov}</span>`
+                ).join('');
+
+                let precHTML = Object.entries(p.precios_sucursal).map(([suc, prec]) => 
+                    `<span class="block text-[11px] text-emerald-400 font-bold"><strong class="text-slate-400">${suc}:</strong> $${prec.toLocaleString()}</span>`
+                ).join('');
+
+                tr.innerHTML = `
+                    <td class="p-3 font-mono text-blue-300 font-bold">${p.sku}</td>
+                    <td class="p-3 font-semibold text-slate-100">${p.nombre}</td>
+                    <td class="p-3">${provHTML}</td>
+                    <td class="p-3">${precHTML}</td>
+                    <td class="p-3 text-center font-bold ${m === 0 ? 'text-rose-400 bg-rose-950/30' : 'text-slate-200'}">${m} u.</td>
+                    <td class="p-3 text-center font-bold ${pa === 0 ? 'text-rose-400 bg-rose-950/30' : 'text-slate-200'}">${pa} u.</td>
+                    <td class="p-3 text-center font-bold ${lf === 0 ? 'text-rose-400 bg-rose-950/30' : 'text-slate-200'}">${lf} u.</td>
+                    <td class="p-3 text-center font-bold text-blue-300 bg-slate-900/60">${p.stock_total} u.</td>
+                    <td class="p-3 text-right">
+                        <button onclick="venderLocal('${p.sku}', 'Maipú')" class="bg-blue-600/80 hover:bg-blue-500 text-white text-[10px] px-2 py-1 rounded mr-1">Maipú</button>
+                        <button onclick="venderLocal('${p.sku}', 'Puente Alto')" class="bg-blue-600/80 hover:bg-blue-500 text-white text-[10px] px-2 py-1 rounded mr-1">P.Alto</button>
+                        <button onclick="venderLocal('${p.sku}', 'La Florida')" class="bg-blue-600/80 hover:bg-blue-500 text-white text-[10px] px-2 py-1 rounded">Florida</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function venderLocal(sku, sucursal) {
+            if(!modoOnline) {
+                colaVentasOffline.push({sku, sucursal, cantidad: 1});
+                document.getElementById('numCola').innerText = colaVentasOffline.length;
+                alert(`[VENTA OFFLINE REGISTRADA (RF-08)]:\nVenta de 1 u. de ${sku} en ${sucursal} guardada en nodo local. Se sincronizará al volver la red.`);
+                return;
+            }
+
+            const res = await fetch('/api/vender', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({sku, sucursal, cantidad: 1, rol: rolActual})
+            });
+            const data = await res.json();
+            if(data.success) {
+                cargarStock();
+                if(rolActual === 'Gerente') cargarAuditoria();
+            } else {
+                alert(data.message);
+            }
+        }
+
+        async function homologarSku() {
+            const input = document.getElementById('inputSkuAntiguo').value.trim();
+            if(!input) return;
+
+            const res = await fetch(`/api/pos-antiguo/homologar/${input}`);
+            const data = await res.json();
+            if(data.success) {
+                alert(`[RF-09 HOMOLOGACIÓN POS ANTIGUO]:\nCódigo POS Antiguo: ${data.sku_antiguo}\nSKU Homologado FerreMax: ${data.sku_homologado}`);
+            } else {
+                alert(data.mensaje);
+            }
+        }
+
+        async function registrarMerma(e) {
+            e.preventDefault();
+            const sku = document.getElementById('mermaSku').value.toUpperCase();
+            const sucursal = document.getElementById('mermaSucursal').value;
+            const cantidad = document.getElementById('mermaCant').value;
+            const motivo = document.getElementById('mermaMotivo').value;
+
+            const res = await fetch('/api/merma', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({sku, sucursal, cantidad, motivo, rol: rolActual})
+            });
+            const data = await res.json();
+            alert(data.message);
+            if(data.success) {
+                cargarStock();
+                if(rolActual === 'Gerente') cargarAuditoria();
+            }
+        }
+
+        async function procesarDevolucion(e) {
+            e.preventDefault();
+            const sku = document.getElementById('devSku').value.toUpperCase();
+            const sucursal = document.getElementById('devSucursal').value;
+            const cantidad = document.getElementById('devCant').value;
+
+            const res = await fetch('/api/devolucion', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({sku, sucursal, cantidad, rol: rolActual})
+            });
+            const data = await res.json();
+            alert(data.message);
+            if(data.success) {
+                cargarStock();
+                if(rolActual === 'Gerente') cargarAuditoria();
+            }
+        }
+
+        async function cargarOrdenes() {
+            const res = await fetch('/api/ordenes');
+            const data = await res.json();
+            const panel = document.getElementById('panelOrdenes');
+            panel.innerHTML = '';
+
+            data.forEach(o => {
+                const item = document.createElement('div');
+                item.className = "bg-slate-900 p-3 rounded-xl border border-slate-700 flex justify-between items-center text-xs shadow-md";
+                
+                let botonAccion = '';
+                if(o.estado === 'BORRADOR') {
+                    if(rolActual === 'Admin') {
+                        botonAccion = `<button onclick="aprobarOrden(${o.id})" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs shadow-md transition animate-pulse">Aprobar y Recepcionar (Admin)</button>`;
+                    } else {
+                        botonAccion = `<span class="text-[11px] text-amber-400 font-bold bg-amber-950/60 border border-amber-600/50 px-2 py-1 rounded-md">1. BORRADOR (Pendiente Admin)</span>`;
+                    }
+                } else {
+                    botonAccion = `<span class="text-[11px] text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-600/50 px-2 py-1 rounded-md"><i class="fa-solid fa-check-circle"></i> APROBADA Y RECEPCIONADA</span>`;
+                }
+
+                const precioTexto = o.precio_unitario ? `$${o.precio_unitario.toLocaleString()}` : 'N/A';
+
+                item.innerHTML = `
+                    <div>
+                        <p class="font-bold text-slate-200">[${o.sucursal}] Orden #${o.id} - ${o.proveedor} (${o.sku} x${o.cantidad} u. a costo ${precioTexto})</p>
+                        <p class="text-slate-400 text-[10px]">Producto: <span class="text-slate-200 font-semibold">${o.nombre_producto}</span> | Estado: <span class="text-blue-400 font-bold">${o.estado}</span></p>
+                    </div>
+                    <div>${botonAccion}</div>
+                `;
+                panel.appendChild(item);
+            });
+        }
+
+        async function crearOrden(e) {
+            e.preventDefault();
+            const sucursal = document.getElementById('ordenSucursal').value;
+            const proveedor = document.getElementById('ordenProv').value;
+            const sku = document.getElementById('ordenSku').value.toUpperCase();
+            const nombre_producto = document.getElementById('ordenNombre').value;
+            const cantidad = document.getElementById('ordenCant').value;
+            const precio_unitario = document.getElementById('ordenPrecio').value;
+
+            const res = await fetch('/api/ordenes', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({sucursal, proveedor, sku, nombre_producto, cantidad, precio_unitario, rol: rolActual})
+            });
+
+            const data = await res.json();
+            alert(data.message);
+            if(data.success) {
+                cargarOrdenes();
+                if(rolActual === 'Gerente') cargarAuditoria();
+            }
+        }
+
+        async function aprobarOrden(id) {
+            const res = await fetch(`/api/ordenes/aprobar/${id}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({rol: rolActual})
+            });
+            const data = await res.json();
+            alert(data.message);
+            if(data.success) {
+                cargarOrdenes();
+                cargarStock();
+                if(rolActual === 'Gerente') cargarAuditoria();
+            }
+        }
+
+        async function guardarUmbral(e) {
+            e.preventDefault();
+            const sku = document.getElementById('umbralSku').value.toUpperCase();
+            const sucursal = document.getElementById('umbralSucursal').value;
+            const umbral = document.getElementById('umbralValor').value;
+
+            const res = await fetch('/api/umbral/actualizar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({sku, sucursal, umbral, rol: rolActual})
+            });
+            const data = await res.json();
+            alert(data.message);
+            if(data.success) cargarStock();
+        }
+
+        async function cargarReservas() {
+            if(!modoOnline) return;
+            const res = await fetch('/api/reservas');
+            const data = await res.json();
+            const container = document.getElementById('listaReservas');
+            container.innerHTML = '';
+
+            data.forEach(r => {
+                const item = document.createElement('div');
+                item.className = "bg-slate-900 p-2.5 rounded-xl border border-slate-700 flex justify-between items-center text-xs";
+                
+                let botonCancelar = '';
+                if(rolActual === 'Cajero' || rolActual === 'Admin') {
+                    botonCancelar = `<button onclick="cancelarReserva(${r.id})" class="bg-rose-900/60 hover:bg-rose-800 border border-rose-600/50 text-rose-200 text-[10px] px-2 py-1 rounded font-bold transition">Cancelar</button>`;
+                } else {
+                    botonCancelar = `<span class="text-[10px] text-slate-500 italic">Solo Cajero</span>`;
+                }
+
+                item.innerHTML = `
+                    <div>
+                        <p class="font-bold text-slate-200">#${r.id} - ${r.cliente} (SKU ${r.sku} x${r.cantidad} u.)</p>
+                        <p class="text-slate-400 text-[10px]">Sucursal: <span class="text-blue-400 font-semibold">${r.sucursal}</span> | Vence: ${r.fecha_expiracion}</p>
+                    </div>
+                    <div>${botonCancelar}</div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        async function crearReserva(e) {
+            e.preventDefault();
+            if(!modoOnline) {
+                alert("[RF-08 BLOQUEO OFFLINE]: Las consultas y reservas inter-sucursal están bloqueadas durante la caída de red.");
+                return;
+            }
+
+            const sku = document.getElementById('reservaSku').value.toUpperCase();
+            const sucursal = document.getElementById('reservaSucursal').value;
+            const cliente = document.getElementById('reservaCliente').value;
+            const cantidad = document.getElementById('reservaCant').value;
+
+            const res = await fetch('/api/reservas', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({sku, sucursal, cliente, cantidad, rol: rolActual})
+            });
+            const data = await res.json();
+            alert(data.message);
+            if(data.success) {
+                cargarReservas();
+                cargarStock();
+            }
+        }
+
+        async function cancelarReserva(id) {
+            const res = await fetch(`/api/reservas/cancelar/${id}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({rol: rolActual})
+            });
+            const data = await res.json();
+            alert(data.message);
+            if(data.success) {
+                cargarReservas();
+                cargarStock();
+                if(rolActual === 'Gerente') cargarAuditoria();
+            }
+        }
+
+        async function expirarReservas() {
+            const res = await fetch('/api/reservas/expirar', {method: 'POST'});
+            const data = await res.json();
+            alert(data.message);
+            cargarReservas();
+            cargarStock();
+        }
+
+        async function ejecutarTraspaso(e) {
+            e.preventDefault();
+            if(!modoOnline) {
+                alert("[RF-08 BLOQUEO OFFLINE]: Los traspasos inter-sucursal están bloqueados durante la caída de red.");
+                return;
+            }
+
+            const sku = document.getElementById('traspasoSku').value.toUpperCase();
+            const cantidad = document.getElementById('traspasoCant').value;
+            const origen = document.getElementById('traspasoOrigen').value;
+            const destino = document.getElementById('traspasoDestino').value;
+
+            if(origen === destino) {
+                alert("Las sucursales de origen y destino deben ser distintas.");
+                return;
+            }
+
+            const res = await fetch('/api/traspaso', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({sku, origen, destino, cantidad, rol: rolActual})
+            });
+            const data = await res.json();
+            alert(data.message);
+            if(data.success) cargarStock();
+        }
+
+        async function cargarAuditoria() {
+            const res = await fetch('/api/auditoria');
+            const data = await res.json();
+            const tbody = document.getElementById('tablaAuditoria');
+            tbody.innerHTML = '';
+
+            data.forEach(a => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-700/30 border-b border-slate-700/40";
+                tr.innerHTML = `
+                    <td class="p-2.5 text-blue-300 font-bold">#${a.id}</td>
+                    <td class="p-2.5 text-slate-400 text-[10px]">${a.fecha}</td>
+                    <td class="p-2.5 font-bold text-amber-300">${a.usuario_rol}</td>
+                    <td class="p-2.5 font-bold text-emerald-400">${a.accion}</td>
+                    <td class="p-2.5 text-slate-300">${a.detalles}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Carga Inicial
+        cambiarRol();
+    </script>
+</body>
+</html>
