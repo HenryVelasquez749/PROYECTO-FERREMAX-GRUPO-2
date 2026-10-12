@@ -9,5 +9,7 @@
 | RF-05 | `POST /api/merma` (`registrar_merma`) | Registrar merma como Bodega y comprobar descuento, motivo y auditoría `AJUSTE_NEGATIVO_MERMA`. |
 | RF-06 | `POST /api/devolucion` (`registrar_devolucion`) | Procesar devolución autorizada y comprobar incremento de stock y auditoría `DEVOLUCION_RECIBIDA`. |
 | RF-07 | `GET /api/stock-consolidado` (`EvaluadorUrgencia`, `EstrategiaLeadTimeLargo`, `EstrategiaTemporadaAlta`) | Sembrar stock bajo umbral y comprobar `alerta_activa`, detalle y nivel de urgencia. |
+| RF-08 | Interfaz `toggleRed`, `sincronizarColaOffline` y `POST /api/sincronizar-offline` | Desconectar el simulador, encolar una venta y comprobar sincronización al volver online. |
+| RNF-03 | Cola offline de `templates/index.html` y `sincronizar_offline` | Repetir la prueba offline y verificar que las transacciones pendientes llegan al backend. |
 
 La matriz se completa incrementalmente a medida que se audita cada requisito contra el backend.
