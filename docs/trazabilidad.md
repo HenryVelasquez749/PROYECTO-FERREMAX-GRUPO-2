@@ -12,5 +12,7 @@
 | RF-08 | Interfaz `toggleRed`, `sincronizarColaOffline` y `POST /api/sincronizar-offline` | Desconectar el simulador, encolar una venta y comprobar sincronización al volver online. |
 | RNF-03 | Cola offline de `templates/index.html` y `sincronizar_offline` | Repetir la prueba offline y verificar que las transacciones pendientes llegan al backend. |
 | RF-09 | `GET /api/pos-antiguo/homologar/<sku_antiguo>` (`homologar_pos_antiguo`) | Consultar `POS-CEM-OLD` y comprobar respuesta `CEM-001` y auditoría de homologación. |
+| RF-10 | `GET/POST /api/ordenes` (`gestionar_ordenes`) y `POST /api/ordenes/aprobar/<id>` (`aprobar_orden`) | Crear borrador como Bodega y aprobarlo como Admin; comprobar estado, stock y precio +30%. |
+| RF-11 | Validaciones de rol en `gestionar_ordenes` y `aprobar_orden` | Intentar crear como Admin y aprobar como Bodega; ambos intentos deben responder 403. |
 
 La matriz se completa incrementalmente a medida que se audita cada requisito contra el backend.
