@@ -15,5 +15,7 @@
 | RF-10 | `GET/POST /api/ordenes` (`gestionar_ordenes`) y `POST /api/ordenes/aprobar/<id>` (`aprobar_orden`) | Crear borrador como Bodega y aprobarlo como Admin; comprobar estado, stock y precio +30%. |
 | RF-11 | Validaciones de rol en `gestionar_ordenes` y `aprobar_orden` | Intentar crear como Admin y aprobar como Bodega; ambos intentos deben responder 403. |
 | RF-12 | `POST /api/traspaso` (`solicitar_traspaso`) | Ejecutar traspaso autorizado y comprobar descuento en origen, suma en destino y consulta ordenada por `id ASC`. |
+| RF-13 | Validaciones `rol_usuario` en las rutas de venta, merma, reservas, órdenes, traspaso y umbral | Ejecutar operaciones con roles no autorizados y comprobar 403; revisar cambios de rol en la interfaz. |
+| RNF-02 | Mismo conjunto de validaciones RBAC y `registrar_auditoria` | Verificar que el control de acceso y los intentos sensibles quedan registrados en bitácora. |
 
 La matriz se completa incrementalmente a medida que se audita cada requisito contra el backend.
