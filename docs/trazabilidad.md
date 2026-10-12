@@ -11,5 +11,6 @@
 | RF-07 | `GET /api/stock-consolidado` (`EvaluadorUrgencia`, `EstrategiaLeadTimeLargo`, `EstrategiaTemporadaAlta`) | Sembrar stock bajo umbral y comprobar `alerta_activa`, detalle y nivel de urgencia. |
 | RF-08 | Interfaz `toggleRed`, `sincronizarColaOffline` y `POST /api/sincronizar-offline` | Desconectar el simulador, encolar una venta y comprobar sincronización al volver online. |
 | RNF-03 | Cola offline de `templates/index.html` y `sincronizar_offline` | Repetir la prueba offline y verificar que las transacciones pendientes llegan al backend. |
+| RF-09 | `GET /api/pos-antiguo/homologar/<sku_antiguo>` (`homologar_pos_antiguo`) | Consultar `POS-CEM-OLD` y comprobar respuesta `CEM-001` y auditoría de homologación. |
 
 La matriz se completa incrementalmente a medida que se audita cada requisito contra el backend.
