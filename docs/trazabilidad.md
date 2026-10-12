@@ -7,5 +7,7 @@
 | RF-03 | `POST /api/reservas/cancelar/<id>` (`cancelar_reserva`) y `POST /api/reservas/expirar` (`expirar_reservas`) | Cancelar y expirar reservas vencidas; verificar cambio de estado y reintegro de unidades. |
 | RF-04 | `POST /api/vender` (`vender`) | Vender como Cajero con stock suficiente y comprobar descuento y auditoría `VENTA_LOCAL`. |
 | RF-05 | `POST /api/merma` (`registrar_merma`) | Registrar merma como Bodega y comprobar descuento, motivo y auditoría `AJUSTE_NEGATIVO_MERMA`. |
+| RF-06 | `POST /api/devolucion` (`registrar_devolucion`) | Procesar devolución autorizada y comprobar incremento de stock y auditoría `DEVOLUCION_RECIBIDA`. |
+| RF-07 | `GET /api/stock-consolidado` (`EvaluadorUrgencia`, `EstrategiaLeadTimeLargo`, `EstrategiaTemporadaAlta`) | Sembrar stock bajo umbral y comprobar `alerta_activa`, detalle y nivel de urgencia. |
 
 La matriz se completa incrementalmente a medida que se audita cada requisito contra el backend.
