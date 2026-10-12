@@ -20,3 +20,7 @@
 | RF-14 | `POST /api/umbral/actualizar` (`actualizar_umbral`) | Actualizar umbral como Admin y comprobar que una alerta posterior usa el nuevo valor. |
 
 La matriz se completa incrementalmente a medida que se audita cada requisito contra el backend.
+
+## Auditoria global
+
+La cobertura RF -> código -> prueba queda completa para RF-01 a RF-14. RNF-02 y RNF-03 tienen evidencia directa en las validaciones RBAC y la sincronización offline; RNF-01 y RNF-06 tienen revisión específica en `docs/auditoria-rnf.md`. RNF-04, RNF-05 y RNF-07 se mantienen como controles de integridad, interfaz y mantenibilidad para la verificación del prototipo.
